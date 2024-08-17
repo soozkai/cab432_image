@@ -3,13 +3,29 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Fetch the backtest data from the server
     try {
-        const response = await fetch('/backtest/BTC?shortWindow=10&longWindow=50');
+        const response = await fetch('/backtest?symbols=BTC,ETH,LTC&shortWindow=10&longWindow=50');
         const data = await response.json();
 
-        // Extract the moving averages and labels
-        const labels = data.data.map((_, index) => `Day ${index + 1}`);
-        const shortMovingAverage = data.shortMovingAverage;
-        const longMovingAverage = data.longMovingAverage;
+        // Log the data to see its structure
+        console.log('Backtest data:', data);
+
+        // Access the results array inside the data object
+        const results = data.results;
+
+        // Ensure results is an array
+        if (!Array.isArray(results)) {
+            throw new Error('Results is not an array');
+        }
+
+        // Prepare datasets for Chart.js
+        const datasets = results.map(result => ({
+            label: `${result.symbol} - Short Moving Average`,
+            data: result.backtestResult.shortMovingAverage,
+            borderColor: getRandomColor(),
+            fill: false
+        }));
+
+        const labels = results[0].backtestResult.data.map((_, index) => `Day ${index + 1}`);
 
         // Create the chart
         const ctx = document.getElementById('cryptoChart').getContext('2d');
@@ -17,26 +33,13 @@ document.addEventListener('DOMContentLoaded', async function() {
             type: 'line',
             data: {
                 labels: labels,
-                datasets: [
-                    {
-                        label: 'Short Moving Average',
-                        data: shortMovingAverage,
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        fill: false
-                    },
-                    {
-                        label: 'Long Moving Average',
-                        data: longMovingAverage,
-                        borderColor: 'rgba(153, 102, 255, 1)',
-                        fill: false
-                    }
-                ]
+                datasets: datasets
             },
             options: {
                 responsive: true,
                 title: {
                     display: true,
-                    text: 'BTC Backtest Results'
+                    text: 'Crypto Backtest Results'
                 }
             }
         });
@@ -44,3 +47,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         console.error('Error fetching backtest data:', error);
     }
 });
+
+// Function to generate random colors for the chart lines
+function getRandomColor() {
+    const letters = '0123456789ABCDEF';
+    let color = '#';
+    for (let i = 0; i < 6; i++) {
+        color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
+}

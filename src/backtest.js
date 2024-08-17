@@ -1,5 +1,4 @@
-const fs = require('fs');
-const path = require('path');
+// backtest.js
 
 // Function to calculate Simple Moving Average (SMA)
 function calculateSMA(prices, window) {
@@ -22,62 +21,59 @@ function calculateEMA(prices, window) {
     return emaArray;
 }
 
-// Function to simulate a crossover strategy (for both SMA and EMA)
-function simulateCrossoverStrategy(shortMA, longMA) {
-    let signals = [];
-    for (let i = 1; i < shortMA.length; i++) {
-        if (shortMA[i] && longMA[i]) {
-            if (shortMA[i] > longMA[i] && shortMA[i - 1] <= longMA[i - 1]) {
-                signals.push({ signal: 'BUY', price: shortMA[i] });
-            } else if (shortMA[i] < longMA[i] && shortMA[i - 1] >= longMA[i - 1]) {
-                signals.push({ signal: 'SELL', price: shortMA[i] });
-            }
-        }
-    }
-    return signals;
+// Function to calculate volatility (standard deviation of returns)
+function calculateVolatility(returns) {
+    if (returns.length === 0) return null;
+
+    const meanReturn = returns.reduce((acc, r) => acc + r, 0) / returns.length;
+    const squaredDiffs = returns.map(r => Math.pow(r - meanReturn, 2));
+    const variance = squaredDiffs.reduce((acc, sd) => acc + sd, 0) / returns.length;
+
+    return Math.sqrt(variance);
 }
 
+// Function to calculate Sharpe Ratio
+function calculateSharpeRatio(meanReturn, volatility, riskFreeRate) {
+    if (volatility === 0 || volatility === null) return null;
+    const excessReturn = meanReturn - riskFreeRate;
+    return excessReturn / volatility;
+}
+
+// Function to calculate Mean Return
+function calculateMeanReturn(returns) {
+    if (returns.length === 0) return null;
+    return returns.reduce((acc, ret) => acc + ret, 0) / returns.length;
+}
+
+// Backtest Function
 function runBacktest(data, shortWindow, longWindow) {
-    let shortMovingAverage = [];
-    let longMovingAverage = [];
+    let shortMovingAverage = calculateSMA(data.map(d => d.close), shortWindow);
+    let longMovingAverage = calculateSMA(data.map(d => d.close), longWindow);
     let volatility = [];
     let sharpeRatio = [];
     const riskFreeRate = 0.01; // Example risk-free rate for Sharpe ratio calculation
 
-    for (let i = shortWindow - 1; i < data.length; i++) {
-        let shortSum = 0, longSum = 0, returns = [];
-
-        // Calculate moving averages
-        for (let j = i - shortWindow + 1; j <= i; j++) {
-            shortSum += data[j].close;
-            if (j >= longWindow - 1) longSum += data[j].close;
-            if (j > 0) returns.push(data[j].close / data[j - 1].close - 1);
-        }
-
-        shortMovingAverage.push(shortSum / shortWindow);
-        if (i >= longWindow - 1) longMovingAverage.push(longSum / longWindow);
-
-        // Calculate volatility (standard deviation of returns)
-        if (returns.length > 0) {
-            const meanReturn = returns.reduce((acc, r) => acc + r, 0) / returns.length;
-            const squaredDiffs = returns.map(r => Math.pow(r - meanReturn, 2));
-            const variance = squaredDiffs.reduce((acc, sd) => acc + sd, 0) / returns.length;
-            volatility.push(Math.sqrt(variance));
-        }
-
-        // Calculate Sharpe ratio (returns adjusted by risk-free rate, divided by volatility)
-        if (volatility.length > 0 && volatility[volatility.length - 1] !== 0) {
-            const excessReturn = meanReturn - riskFreeRate;
-            sharpeRatio.push(excessReturn / volatility[volatility.length - 1]);
-        }
+    // Calculate returns, volatility, and Sharpe ratio
+    let returns = [];
+    for (let i = 1; i < data.length; i++) {
+        returns.push(data[i].close / data[i - 1].close - 1);
     }
 
+    let meanReturn = calculateMeanReturn(returns);
+    let vol = calculateVolatility(returns);
+
+    for (let i = longWindow - 1; i < data.length; i++) {
+        volatility.push(vol);
+        sharpeRatio.push(calculateSharpeRatio(meanReturn, vol, riskFreeRate));
+    }
+
+    // Trimming the data to align with the long moving average
     return {
-        shortMovingAverage,
-        longMovingAverage,
+        shortMovingAverage: shortMovingAverage.slice(longWindow - 1),
+        longMovingAverage: longMovingAverage.slice(longWindow - 1),
         volatility,
         sharpeRatio,
-        data: data.slice(longWindow - 1) // Trimming the data to align with the long moving average
+        data: data.slice(longWindow - 1)
     };
 }
 
